@@ -133,7 +133,7 @@ final class EVH_Plugin {
             if (!is_scalar($value)) { throw new RuntimeException('Invalid hire details.'); }
             $input[$field] = sanitize_text_field(wp_unslash((string) $value));
         }
-        foreach (array('insurance', 'tyre', 'screen', 'overseas', 'eligible') as $field) {
+        foreach (array('insurance', 'tyre', 'screen', 'overseas', 'eligible', 'own_insurance', 'own_ack') as $field) {
             $value = $source['evh_' . $field] ?? '0';
             if (!is_scalar($value) || !in_array((string) $value, array('0', '1'), true)) { throw new RuntimeException('Invalid insurance selection.'); }
             $input[$field] = (string) $value === '1' ? 1 : 0;
@@ -150,6 +150,9 @@ final class EVH_Plugin {
         if (!self::enabled($product) || $product->get_status() !== 'publish' || !is_finite((float) $product->get_meta('_evh_capacity')) || (int) $product->get_meta('_evh_capacity') < 1) {
             throw new RuntimeException('This vehicle is not available for online hire.');
         }
+        if (!empty($input['insurance']) && !empty($input['own_insurance'])) { throw new RuntimeException('Choose either EVision vehicle insurance or your own insurance.'); }
+        if ($require_eligible && empty($input['insurance']) && empty($input['own_insurance'])) { throw new RuntimeException('Please choose EVision vehicle insurance or confirm you will provide your own.'); }
+        if ($require_eligible && !empty($input['own_insurance']) && empty($input['own_ack'])) { throw new RuntimeException('Please acknowledge the requirements for providing your own insurance.'); }
         EVH_Rules::date($input['start'] ?? ''); EVH_Rules::date($input['end'] ?? '');
         self::ensure_calendar($input['start']); self::ensure_calendar($input['end']);
         $result = EVH_Rules::quote($input, self::rates($product), (int) $product->get_meta('_evh_notice'), self::now(), array(__CLASS__, 'closed'), (float) self::option('out_fee', 25));
@@ -191,7 +194,7 @@ final class EVH_Plugin {
     public static function form(): void {
         global $product;
         if (!self::enabled($product)) { return; }
-        echo '<section class="evh-booking" data-product="' . esc_attr($product->get_id()) . '"><h3>Choose your hire</h3>';
+        echo '<section class="evh-booking" data-product="' . esc_attr($product->get_id()) . '">';
         echo '<div class="evh-live-total" data-state="empty" role="status" aria-live="polite" aria-atomic="true"><span class="evh-total-label">Total payable today</span><strong class="evh-total-amount">Select your dates</strong><small class="evh-total-state">Your total will update as you select your options.</small></div>';
         echo '<p class="evh-form-note">Dates and times use UK local time.</p><p class="evh-delivery-note">Vehicle delivery is available to add at checkout.</p>';
         wp_nonce_field('evh_booking', 'evh_nonce');
@@ -206,8 +209,10 @@ final class EVH_Plugin {
             echo '<option value="out">Out of hours: team to arrange</option></select></p></div>';
         }
         echo '<p id="evh-payment"><label for="evh_payment">Payment option</label><select name="evh_payment" id="evh_payment"><option value="full">Pay full hire amount now</option><option value="first">Pay first month only (30+ day hires)</option></select></p>';
-        echo '<fieldset class="evh-insurance"><legend>Optional insurance</legend><p>No VAT is added to these insurance options. International insurance doubles all selected insurance charges.</p>';
-        echo '<p><label><input type="checkbox" name="evh_insurance" value="1"> Vehicle insurance: <span data-evh-offer="insurance">50% of the applicable rental rate</span></label></p>';
+        echo '<fieldset class="evh-insurance"><legend>Insurance</legend><p>No VAT is added to these insurance options. International insurance doubles all selected insurance charges.</p>';
+        echo '<p><label><input type="checkbox" name="evh_insurance" value="1"> EVision vehicle insurance: <span data-evh-offer="insurance">50% of the applicable rental rate</span></label></p>';
+        echo '<p><label><input type="checkbox" name="evh_own_insurance" value="1"> I will provide my own insurance</label></p>';
+        echo '<div class="evh-own-insurance-note" hidden><p>A refundable deposit is required before hire. The EVision team will contact you to arrange payment. Deposit return is processed approximately 7–10 days after hire ends, subject to satisfactory vehicle condition.</p><ul><li>The policy must be in the name of the person or company paying for the booking.</li><li>Cover must be fully comprehensive.</li><li>The policy must state the vehicle registration, which we will confirm once booked.</li><li>Your insurer must be aware that the vehicle is hired.</li></ul><label><input type="checkbox" name="evh_own_ack" value="1"> I have read and understand these own-insurance requirements.</label></div>';
         echo '<p class="evh-drivers" hidden><label for="evh_drivers">Number of insured drivers</label><input type="number" id="evh_drivers" name="evh_drivers" min="1" max="99" step="1" value="1"><small>Includes the first driver. Each additional driver costs the same as the first.</small></p>';
         echo '<p><label><input type="checkbox" name="evh_tyre" value="1"> Tyre insurance: <span data-evh-offer="tyre">£4.00 per hire day</span></label></p>';
         echo '<p><label><input type="checkbox" name="evh_screen" value="1"> Screen insurance: <span data-evh-offer="screen">£4.00 per hire day</span></label></p>';
@@ -242,7 +247,7 @@ final class EVH_Plugin {
 
     public static function quote_html(array $q, $p): string {
         $days = $q['days'];
-        $html = '<h4>Your hire quotation</h4><p>' . esc_html($days . ' chargeable day' . ($days === 1 ? '' : 's')) . '</p>';
+        $html = '<h4>Your hire quotation</h4><p class="evh-insurance-summary">Vehicle insurance: ' . (!empty($q['input']['insurance']) ? 'EVision insurance selected' : (!empty($q['input']['own_insurance']) ? 'You will provide your own insurance' : 'Please choose your insurance cover')) . '</p><p>' . esc_html($days . ' chargeable day' . ($days === 1 ? '' : 's')) . '</p>';
         if ($days >= 30) { $html .= '<p><strong>' . self::money_pair($q['monthly'], $p) . ' per month</strong></p>'; }
         $html .= '<p>' . self::money_pair($q['daily'], $p) . ' per day</p>';
         $first = $q['payment'] === 'first';
@@ -369,6 +374,8 @@ final class EVH_Plugin {
         $q = $item['evh_quote'] ?? null;
         if ($q) {
             $data[] = array('key' => 'Refundable damage deposit', 'value' => self::deposit_message($item['data'], !empty($input['insurance'])));
+            $data[] = array('key' => 'Vehicle insurance', 'value' => !empty($input['insurance']) ? 'EVision insurance selected' : (!empty($input['own_insurance']) ? 'Customer will provide own insurance' : 'Not selected'));
+            if (!empty($input['own_insurance'])) { $data[] = array('key' => 'Own-insurance requirements acknowledged', 'value' => !empty($input['own_ack']) ? 'Yes' : 'No'); }
             if (!empty($input['insurance'])) { $data[] = array('key' => 'Insured drivers', 'value' => (string) ($input['drivers'] ?? 1)); }
             $data[] = array('key' => 'Hire length', 'value' => $q['days'] . ' days');
             $data[] = array('key' => 'Payment', 'value' => $q['payment'] === 'first' ? 'First month only; accounts team will arrange Direct Debit' : 'Full hire amount');
