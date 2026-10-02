@@ -2,7 +2,7 @@
 /**
  * Plugin Name: EVision Vehicle Hire
  * Description: Vehicle hire pricing, notice rules, insurance extras and fleet reservations for WooCommerce. Test release.
- * Version: 0.1.9
+ * Version: 0.1.11
  * Requires at least: 6.5
  * Requires PHP: 8.1
  * Requires Plugins: woocommerce
@@ -11,7 +11,7 @@
  * Text Domain: evision-vehicle-hire
  */
 defined('ABSPATH') || exit;
-define('EVH_VERSION', '0.1.9');
+define('EVH_VERSION', '0.1.11');
 define('EVH_SCHEMA_VERSION', '0.1.0');
 define('EVH_PATH', plugin_dir_path(__FILE__));
 define('EVH_URL', plugin_dir_url(__FILE__));
