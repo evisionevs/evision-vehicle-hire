@@ -6,7 +6,7 @@ final class EVH_Plugin {
     public const EXTRA_LABELS = array('insurance' => 'Vehicle insurance', 'tyre' => 'Tyre insurance', 'screen' => 'Screen insurance');
     public const LOCATIONS = array(
         'head_office' => 'EVision Head Office - ME2 4DZ',
-        'cullumpton' => 'Cullompton, Devon - EX15 2PE',
+        'cullompton' => 'Cullompton, Devon - EX15 2PE',
         'castleford' => 'Castleford, West Yorkshire - WF10 5NW',
         'langley_park' => 'Langley Park, Durham - DH7 9TT',
         'delivery' => 'Delivery/collection required (quoted at checkout)',
@@ -218,6 +218,7 @@ final class EVH_Plugin {
     public static function form(): void {
         global $product;
         if (!self::enabled($product)) { return; }
+        $out_fee_formatted = html_entity_decode(wp_strip_all_tags(wc_price(self::option('out_fee', 25))), ENT_QUOTES, 'UTF-8');
         echo '<section class="evh-booking" data-product="' . esc_attr($product->get_id()) . '">';
         echo '<div class="evh-live-total" data-state="empty" role="status" aria-live="polite" aria-atomic="true"><span class="evh-total-label">Total payable today</span><strong class="evh-total-amount">Select your dates</strong><small class="evh-total-state">Your total will update as you select your options.</small></div>';
         echo '<p class="evh-form-note">Dates and times use UK local time.</p><p class="evh-delivery-note">Vehicle delivery is available to add at checkout.</p>';
@@ -235,8 +236,9 @@ final class EVH_Plugin {
                 $time = sprintf('%02d:%02d', intdiv($minutes, 60), $minutes % 60);
                 echo '<option value="' . esc_attr($time) . '"' . selected($time, '09:00', false) . '>' . esc_html($time) . '</option>';
             }
-            echo '<option value="out">Out of hours: team to arrange</option></select></p></div>';
+            echo '<option value="out">Out of hours: team to arrange (+' . esc_html($out_fee_formatted) . ' ex VAT)</option></select></p></div>';
         }
+        echo '<p class="evh-form-note"><small>Note: Hires are calculated in 24-hour daily periods. Returning a vehicle before your agreed return time is still charged as a full daily rental.</small></p>';
         echo '<p id="evh-payment"><label for="evh_payment">Payment option</label><select name="evh_payment" id="evh_payment"><option value="full">Pay full hire amount now</option><option value="first">Pay first month only (30+ day hires)</option></select></p>';
         echo '<fieldset class="evh-insurance"><legend>Insurance</legend><p>No VAT is added to these insurance options. International insurance doubles all selected insurance charges.</p>';
         echo '<p><label><input type="checkbox" name="evh_insurance" value="1"> EVision vehicle insurance: <span data-evh-offer="insurance">50% of the applicable rental rate</span></label></p>';
@@ -247,7 +249,7 @@ final class EVH_Plugin {
         echo '<p><label><input type="checkbox" name="evh_tyre" value="1"> Tyre insurance: <span data-evh-offer="tyre">£4.00 per hire day</span></label></p>';
         echo '<p><label><input type="checkbox" name="evh_screen" value="1"> Screen insurance: <span data-evh-offer="screen">£4.00 per hire day</span></label></p>';
         echo '<p><label><input type="checkbox" name="evh_overseas" value="1"> International Insurance Required</label></p><p class="evh-terms-note">Full Terms and Conditions can be found <a href="https://www.evisionevs.co.uk/terms-conditions/" target="_blank" rel="noopener noreferrer">here</a>.</p></fieldset>';
-        echo '<aside class="evh-deposit-note" data-own="' . esc_attr(self::deposit_amount($product, false) ?? '') . '" data-evision="' . esc_attr(self::deposit_amount($product, true) ?? '') . '"><strong>Refundable damage deposit</strong><span class="evh-deposit-info">' . esc_html(self::deposit_message($product, false)) . '</span><small>Processed for return approximately 7–10 working days after the hire ends, subject to satisfactory vehicle condition.</small></aside>';
+        echo '<aside class="evh-deposit-note" data-own="' . esc_attr(self::deposit_amount($product, false) ?? '') . '" data-evision="' . esc_attr(self::deposit_amount($product, true) ?? '') . '"><strong>Refundable damage deposit</strong><span class="evh-deposit-info">' . esc_html(self::deposit_message($product, false)) . '</span><small>Processed for return approximately 7–10 days after the hire ends, subject to satisfactory vehicle condition.</small></aside>';
         echo '<div class="evh-eligibility"><strong>Driver and insurance requirements</strong><p>' . esc_html(self::eligibility($product)) . '</p>';
         echo '<label><input type="checkbox" name="evh_eligible" value="1"> I confirm these requirements are met if I select your insurance.</label></div>';
         echo '<div class="evh-quote" aria-live="polite" aria-atomic="true">Choose your dates to see your quote.</div>';
