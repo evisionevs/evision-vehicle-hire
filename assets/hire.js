@@ -92,8 +92,8 @@
     adjust();
     const start = panel.querySelector('[name="evh_start"]').value;
     const end = panel.querySelector('[name="evh_end"]').value;
-    if (!start || !end) { quote.textContent = 'Choose your dates to see your quote.'; status.textContent = ''; markTotal('empty', 'Your total will update as you select your options.', 'Select your dates'); return; }
-    if (end < start) { quote.textContent = 'Please choose a return date on or after your collection date.'; status.textContent = ''; markTotal('empty', 'Update your return date to calculate your price.', 'Choose return date'); return; }
+    if (!start || !end) { quote.classList.remove('evh-error-message'); quote.textContent = 'Choose your dates to see your quote.'; status.textContent = ''; markTotal('empty', 'Your total will update as you select your options.', 'Select your dates'); return; }
+    if (end < start) { quote.classList.add('evh-error-message'); quote.textContent = 'Please choose a return date on or after your collection date.'; status.textContent = ''; markTotal('empty', 'Update your return date to calculate your price.', 'Choose return date'); return; }
     const request = ++generation;
     if (controller) controller.abort();
     controller = new AbortController();
@@ -111,10 +111,12 @@
       const result = await response.json();
       if (request !== generation) return;
       if (!result.success) {
+        quote.classList.add('evh-error-message');
         quote.textContent = result.data?.message || 'Your quote is unavailable. Please try again.';
         markTotal('invalid', result.data?.message || 'Please check your dates or options below.', 'Unavailable');
         status.textContent = ''; return;
       }
+      quote.classList.remove('evh-error-message');
       // This fragment is generated and escaped by the WordPress endpoint; it contains no customer HTML.
       quote.innerHTML = result.data.html;
       if (totalAmount && result.data.total_today_html) totalAmount.innerHTML = result.data.total_today_html;
@@ -127,6 +129,7 @@
       disable(false);
     } catch (error) {
       if (error.name === 'AbortError' || request !== generation) return;
+      quote.classList.add('evh-error-message');
       quote.textContent = 'We could not check your quote. Please try again or contact our team.';
       markTotal('invalid', 'We could not confirm your total. Please try again.', 'Unavailable');
       status.textContent = '';
