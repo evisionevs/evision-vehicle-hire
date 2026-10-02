@@ -4,6 +4,13 @@ defined('ABSPATH') || exit;
 final class EVH_Plugin {
     public const TAX_CLASS = 'evision-vehicle-hire';
     public const EXTRA_LABELS = array('insurance' => 'Vehicle insurance', 'tyre' => 'Tyre insurance', 'screen' => 'Screen insurance');
+    public const LOCATIONS = array(
+        'head_office' => 'EVision Head Office - ME2 4DZ',
+        'cullumpton' => 'Cullumpton, Devon - EX15 2PE',
+        'castleford' => 'Castleford, West Yorkshire - WF10 5NW',
+        'langley_park' => 'Langley Park, Durham - DH7 9TT',
+        'delivery' => 'Delivery/collection required (quoted at checkout)',
+    );
     private static bool $status_guard = false;
 
     public static function boot(): void {
@@ -141,6 +148,17 @@ final class EVH_Plugin {
         $drivers = $source['evh_drivers'] ?? '1';
         if (!is_scalar($drivers) || !preg_match('/^[1-9][0-9]?$/', (string) $drivers)) { throw new RuntimeException('Choose a valid number of insured drivers (1–99).'); }
         $input['drivers'] = (int) $drivers;
+        foreach (array('collection_location', 'return_location') as $field) {
+            $value = $source['evh_' . $field] ?? '';
+            if (!is_scalar($value)) { throw new RuntimeException('Invalid collection or return location.'); }
+            $value = sanitize_text_field(wp_unslash((string) $value));
+            if ($value !== '' && !array_key_exists($value, self::LOCATIONS)) { throw new RuntimeException('Choose a listed collection or return location.'); }
+            $input[$field] = $value;
+        }
+        $same = $source['evh_return_same'] ?? '1';
+        if (!is_scalar($same) || !in_array((string) $same, array('0', '1'), true)) { throw new RuntimeException('Invalid return location selection.'); }
+        $input['return_same'] = (int) $same;
+        if ($input['return_same']) { $input['return_location'] = $input['collection_location']; }
         return $input;
     }
 
@@ -149,6 +167,12 @@ final class EVH_Plugin {
         $product = wc_get_product($id);
         if (!self::enabled($product) || $product->get_status() !== 'publish' || !is_finite((float) $product->get_meta('_evh_capacity')) || (int) $product->get_meta('_evh_capacity') < 1) {
             throw new RuntimeException('This vehicle is not available for online hire.');
+        }
+        if (!empty($input['return_same'])) { $input['return_location'] = $input['collection_location'] ?? ''; }
+        foreach (array('collection_location', 'return_location') as $field) {
+            $location = $input[$field] ?? '';
+            if (!is_string($location) || ($location !== '' && !array_key_exists($location, self::LOCATIONS))) { throw new RuntimeException('Choose a listed collection or return location.'); }
+            if ($require_eligible && $location === '') { throw new RuntimeException('Please select collection and return locations before adding your hire to the basket.'); }
         }
         if (!empty($input['insurance']) && !empty($input['own_insurance'])) { throw new RuntimeException('Choose either EVision vehicle insurance or your own insurance.'); }
         if ($require_eligible && empty($input['insurance']) && empty($input['own_insurance'])) { throw new RuntimeException('Please choose EVision vehicle insurance or confirm you will provide your own.'); }
@@ -198,6 +222,11 @@ final class EVH_Plugin {
         echo '<div class="evh-live-total" data-state="empty" role="status" aria-live="polite" aria-atomic="true"><span class="evh-total-label">Total payable today</span><strong class="evh-total-amount">Select your dates</strong><small class="evh-total-state">Your total will update as you select your options.</small></div>';
         echo '<p class="evh-form-note">Dates and times use UK local time.</p><p class="evh-delivery-note">Vehicle delivery is available to add at checkout.</p>';
         wp_nonce_field('evh_booking', 'evh_nonce');
+        echo '<div class="evh-locations"><label for="evh_collection_location">Collect Vehicle from:</label>';
+        self::location_select('collection_location');
+        echo '<label class="evh-return-same"><input type="checkbox" name="evh_return_same" value="1" checked> Return to the same location</label><div class="evh-return-location" hidden><label for="evh_return_location">Return Vehicle to:</label>';
+        self::location_select('return_location');
+        echo '</div><p id="evh-location-error" class="evh-location-error" role="alert" hidden></p></div>';
         $min = self::now()->format('Y-m-d');
         foreach (array('start' => 'Collection', 'end' => 'Return') as $key => $label) {
             echo '<div class="evh-fields"><p><label for="evh_' . esc_attr($key) . '">' . esc_html($label) . ' date</label><input type="date" id="evh_' . esc_attr($key) . '" name="evh_' . esc_attr($key) . '" min="' . esc_attr($min) . '" required></p>';
@@ -212,6 +241,7 @@ final class EVH_Plugin {
         echo '<fieldset class="evh-insurance"><legend>Insurance</legend><p>No VAT is added to these insurance options. International insurance doubles all selected insurance charges.</p>';
         echo '<p><label><input type="checkbox" name="evh_insurance" value="1"> EVision vehicle insurance: <span data-evh-offer="insurance">50% of the applicable rental rate</span></label></p>';
         echo '<p><label><input type="checkbox" name="evh_own_insurance" value="1"> I will provide my own insurance</label></p>';
+        echo '<p class="evh-insurance-error" role="alert" hidden></p>';
         echo '<div class="evh-own-insurance-note" hidden><p>A refundable deposit is required before hire. The EVision team will contact you to arrange payment. Deposit return is processed approximately 7–10 days after hire ends, subject to satisfactory vehicle condition.</p><ul><li>The policy must be in the name of the person or company paying for the booking.</li><li>Cover must be fully comprehensive.</li><li>The policy must state the vehicle registration, which we will confirm once booked.</li><li>Your insurer must be aware that the vehicle is hired.</li></ul><label><input type="checkbox" name="evh_own_ack" value="1"> I have read and understand these own-insurance requirements.</label></div>';
         echo '<p class="evh-drivers" hidden><label for="evh_drivers">Number of insured drivers</label><input type="number" id="evh_drivers" name="evh_drivers" min="1" max="99" step="1" value="1"><small>Includes the first driver. Each additional driver costs the same as the first.</small></p>';
         echo '<p><label><input type="checkbox" name="evh_tyre" value="1"> Tyre insurance: <span data-evh-offer="tyre">£4.00 per hire day</span></label></p>';
@@ -222,6 +252,15 @@ final class EVH_Plugin {
         echo '<label><input type="checkbox" name="evh_eligible" value="1"> I confirm these requirements are met if I select your insurance.</label></div>';
         echo '<div class="evh-quote" aria-live="polite" aria-atomic="true">Choose your dates to see your quote.</div>';
         echo '<p class="evh-status" role="status"></p><noscript><p>Enable JavaScript to preview your quote. Your selection is always checked again at checkout.</p></noscript></section>';
+    }
+
+    private static function location_select(string $field): void {
+        echo '<select id="evh_' . esc_attr($field) . '" name="evh_' . esc_attr($field) . '" aria-describedby="evh-location-error"' . ($field === 'collection_location' ? ' required' : '') . '><option value="">Select a location</option>';
+        foreach (self::LOCATIONS as $key => $label) {
+            if ($key === 'delivery') { $label = $field === 'collection_location' ? 'I will require delivery of the vehicle (quoted at checkout)' : 'I will require collection of the vehicle (quoted at checkout)'; }
+            echo '<option value="' . esc_attr($key) . '">' . esc_html($label) . '</option>';
+        }
+        echo '</select>';
     }
 
     public static function money_pair(float $ex, $p): string {
@@ -248,6 +287,10 @@ final class EVH_Plugin {
     public static function quote_html(array $q, $p): string {
         $days = $q['days'];
         $html = '<h4>Your hire quotation</h4><p class="evh-insurance-summary">Vehicle insurance: ' . (!empty($q['input']['insurance']) ? 'EVision insurance selected' : (!empty($q['input']['own_insurance']) ? 'You will provide your own insurance' : 'Please choose your insurance cover')) . '</p><p>' . esc_html($days . ' chargeable day' . ($days === 1 ? '' : 's')) . '</p>';
+        foreach (array('collection_location' => 'Collection', 'return_location' => 'Return') as $field => $label) {
+            if (!empty($q['input'][$field]) && isset(self::LOCATIONS[$q['input'][$field]])) { $html .= '<p class="evh-location-summary">' . esc_html($label . ': ' . self::LOCATIONS[$q['input'][$field]]) . '</p>'; }
+        }
+        if (($q['input']['collection_location'] ?? '') === 'delivery' || ($q['input']['return_location'] ?? '') === 'delivery') { $html .= '<p class="evh-delivery-summary">Delivery/collection will be quoted at checkout and is not included in this hire total.</p>'; }
         if ($days >= 30) { $html .= '<p><strong>' . self::money_pair($q['monthly'], $p) . ' per month</strong></p>'; }
         $html .= '<p>' . self::money_pair($q['daily'], $p) . ' per day</p>';
         $first = $q['payment'] === 'first';
@@ -370,6 +413,9 @@ final class EVH_Plugin {
         $input = $item['evh_input'];
         foreach (array('start' => 'Collection', 'end' => 'Return') as $key => $label) {
             $data[] = array('key' => $label, 'value' => $input[$key] . ' ' . ($input[$key . '_time'] === 'out' ? '(out of hours, time to be agreed)' : $input[$key . '_time']));
+        }
+        foreach (array('collection_location' => 'Collection location', 'return_location' => 'Return location') as $field => $label) {
+            if (!empty($input[$field]) && isset(self::LOCATIONS[$input[$field]])) { $data[] = array('key' => $label, 'value' => self::LOCATIONS[$input[$field]]); }
         }
         $q = $item['evh_quote'] ?? null;
         if ($q) {
