@@ -82,3 +82,17 @@
 .evh-booking .evh-return-same { margin: .5rem 0; }
 .evh-booking .evh-return-location[hidden], .evh-booking .evh-location-error[hidden] { display: none; }
 .evh-booking .evh-location-error { color: #b0201c; font-size: .8rem; line-height: 1.4; }
+
+/* Bold prominent alert styling for notice & validation error messages */
+.evh-booking .evh-quote.evh-error-message {
+  background: #fff5f5;
+  border: 2px solid #d82c27;
+  border-left: 6px solid #d82c27;
+  color: #b0201c;
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  padding: 1rem;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(216, 44, 39, 0.15);
+}
