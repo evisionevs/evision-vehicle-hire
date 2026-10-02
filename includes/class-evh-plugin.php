@@ -290,7 +290,7 @@ final class EVH_Plugin {
             $multiplier = $input['overseas'] ? 2 : 1;
             $offer = self::plain_money($q['daily'] * 0.5 * $multiplier) . ' per driver per day (no VAT)';
             if ($q['days'] >= 30) { $offer = self::plain_money($q['monthly'] * 0.5 * $multiplier) . ' per driver per month; ' . $offer; }
-            wp_send_json_success(array('html' => self::quote_html($q, wc_get_product($id)), 'days' => $q['days'], 'available' => EVH_Storage::available($id, $input['start'], $input['end']),
+            wp_send_json_success(array('html' => self::quote_html($q, wc_get_product($id)), 'days' => $q['days'],
                 'total_today_html' => self::total_today_html($q, wc_get_product($id)), 'payment' => $q['payment'],
                 'offers' => array('insurance' => $offer, 'tyre' => self::plain_money(4 * $multiplier) . ' per day (no VAT)', 'screen' => self::plain_money(4 * $multiplier) . ' per day (no VAT)')));
         } catch (Throwable $e) { wp_send_json_error(array('message' => $e instanceof RuntimeException ? $e->getMessage() : 'The quotation could not be calculated. Please contact our team.'), 400); }
