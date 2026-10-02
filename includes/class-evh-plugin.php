@@ -6,7 +6,7 @@ final class EVH_Plugin {
     public const EXTRA_LABELS = array('insurance' => 'Vehicle insurance', 'tyre' => 'Tyre insurance', 'screen' => 'Screen insurance');
     public const LOCATIONS = array(
         'head_office' => 'EVision Head Office - ME2 4DZ',
-        'cullumpton' => 'Cullumpton, Devon - EX15 2PE',
+        'cullumpton' => 'Cullompton, Devon - EX15 2PE',
         'castleford' => 'Castleford, West Yorkshire - WF10 5NW',
         'langley_park' => 'Langley Park, Durham - DH7 9TT',
         'delivery' => 'Delivery/collection required (quoted at checkout)',
