@@ -20,8 +20,41 @@
     totalState.textContent = message;
     if (amount !== undefined) totalAmount.textContent = amount;
   }
+  function requireInsurance(event) {
+    const collection = panel.querySelector('[name="evh_collection_location"]');
+    const returned = panel.querySelector('[name="evh_return_location"]');
+    const same = panel.querySelector('[name="evh_return_same"]').checked;
+    if (!collection.value || (!same && !returned.value)) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      const error = panel.querySelector('.evh-location-error');
+      error.textContent = 'Please select collection and return locations before adding your hire to the basket.';
+      error.hidden = false; (collection.value ? returned : collection).focus(); return;
+    }
+    const cover = panel.querySelector('[name="evh_insurance"]');
+    const own = panel.querySelector('[name="evh_own_insurance"]');
+    if (cover.checked || own.checked) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const error = panel.querySelector('.evh-insurance-error');
+    error.textContent = 'Please select EVision vehicle insurance or “I will provide my own insurance” before adding your hire to the basket. Every hire must have vehicle insurance cover.';
+    error.hidden = false;
+    cover.setAttribute('aria-describedby', 'evh-insurance-error');
+    own.setAttribute('aria-describedby', 'evh-insurance-error');
+    error.id = 'evh-insurance-error';
+    cover.focus();
+  }
+  if (add) add.addEventListener('click', requireInsurance, true);
+  form.addEventListener('submit', requireInsurance, true);
   function adjust() {
+    const same = panel.querySelector('[name="evh_return_same"]').checked;
+    const collection = panel.querySelector('[name="evh_collection_location"]');
+    const returned = panel.querySelector('[name="evh_return_location"]');
+    panel.querySelector('.evh-return-location').hidden = same;
+    returned.required = !same;
+    if (same) returned.value = collection.value;
+    if (collection.value && (same || returned.value)) panel.querySelector('.evh-location-error').hidden = true;
     const own = panel.querySelector('[name="evh_own_insurance"]').checked;
+    if (own || panel.querySelector('[name="evh_insurance"]').checked) panel.querySelector('.evh-insurance-error').hidden = true;
     panel.querySelector('.evh-own-insurance-note').hidden = !own;
     panel.querySelector('[name="evh_own_ack"]').required = own;
     panel.querySelector('.evh-drivers').hidden = !panel.querySelector('[name="evh_insurance"]').checked;
