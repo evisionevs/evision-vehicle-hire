@@ -66,3 +66,9 @@
 .evh-booking .evh-drivers small { display: block; font-size: .75rem; }
 .evh-booking .evh-insurance .evh-terms-note { font-size: .75rem; margin-top: .5rem; }
 .evh-booking .evh-terms-note a { color: #d82c27; text-decoration: underline; }
+
+.evh-booking .evh-own-insurance-note[hidden] { display: none; }
+.evh-booking .evh-own-insurance-note { font-size: .75rem; line-height: 1.4; padding: .5rem .6rem; background: #fff; border: 1px solid #ddd; border-radius: 4px; }
+.evh-booking .evh-own-insurance-note p, .evh-booking .evh-own-insurance-note label { font-size: inherit; line-height: inherit; }
+.evh-booking .evh-own-insurance-note ul { margin: .35rem 0 .5rem; padding-left: 1.1rem; font-size: inherit; line-height: inherit; }
+.evh-booking .evh-own-insurance-note li { margin: .15rem 0; }
