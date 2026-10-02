@@ -21,6 +21,9 @@
     if (amount !== undefined) totalAmount.textContent = amount;
   }
   function adjust() {
+    const own = panel.querySelector('[name="evh_own_insurance"]').checked;
+    panel.querySelector('.evh-own-insurance-note').hidden = !own;
+    panel.querySelector('[name="evh_own_ack"]').required = own;
     panel.querySelector('.evh-drivers').hidden = !panel.querySelector('[name="evh_insurance"]').checked;
     const deposit = panel.querySelector('.evh-deposit-note');
     if (deposit) {
@@ -30,6 +33,7 @@
         ? `A refundable damage deposit of ${new Intl.NumberFormat('en-GB', {style: 'currency', currency: 'GBP'}).format(amount)} is required before collection, separately from today’s payment.`
         : 'A refundable damage deposit is required before collection, separately from today’s payment. See Insurance Information on this vehicle’s page for the deposit and excess amounts.';
       deposit.querySelector('.evh-deposit-info').textContent = message;
+      deposit.querySelector('small').textContent = `Processed for return approximately 7–10 ${own ? 'days' : 'working days'} after the hire ends, subject to satisfactory vehicle condition.`;
     }
     for (const key of ['start', 'end']) {
       const date = panel.querySelector(`[name="evh_${key}"]`).value;
@@ -92,7 +96,9 @@
       status.textContent = '';
     }
   }
-  panel.addEventListener('change', () => {
+  panel.addEventListener('change', event => {
+    if (event.target.name === 'evh_insurance' && event.target.checked) { panel.querySelector('[name="evh_own_insurance"]').checked = false; panel.querySelector('[name="evh_own_ack"]').checked = false; }
+    if (event.target.name === 'evh_own_insurance' && event.target.checked) panel.querySelector('[name="evh_insurance"]').checked = false;
     generation++; if (controller) controller.abort();
     disable(true); markTotal('updating', 'Updating your total…'); clearTimeout(timer); adjust(); timer = setTimeout(update, 100);
   });
