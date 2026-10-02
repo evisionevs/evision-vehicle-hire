@@ -41,11 +41,13 @@
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
       const saturday = new Date(`${date}T12:00:00Z`).getUTCDay() === 6;
       for (const option of time.options) option.disabled = saturday && option.value !== 'out';
-      if (saturday) time.value = 'out';
+      if (saturday && time.value !== 'out') { time.dataset.weekdayTime = time.value; time.dataset.saturdayAuto = '1'; time.value = 'out'; }
+      else if (!saturday && time.dataset.saturdayAuto === '1') { time.value = time.dataset.weekdayTime || '09:00'; delete time.dataset.saturdayAuto; delete time.dataset.weekdayTime; }
     }
     const start = panel.querySelector('[name="evh_start"]').value;
     const end = panel.querySelector('[name="evh_end"]').value;
-    if (start) panel.querySelector('[name="evh_end"]').min = start;
+    const endField = panel.querySelector('[name="evh_end"]');
+    endField.min = start || panel.querySelector('[name="evh_start"]').min;
     const days = start && end ? (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000 : 0;
     const payment = panel.querySelector('[name="evh_payment"]');
     payment.options[1].disabled = days < 30;
@@ -58,6 +60,7 @@
     const start = panel.querySelector('[name="evh_start"]').value;
     const end = panel.querySelector('[name="evh_end"]').value;
     if (!start || !end) { quote.textContent = 'Choose your dates to see your quote.'; status.textContent = ''; markTotal('empty', 'Your total will update as you select your options.', 'Select your dates'); return; }
+    if (end < start) { quote.textContent = 'Please choose a return date on or after your collection date.'; status.textContent = ''; markTotal('empty', 'Update your return date to calculate your price.', 'Choose return date'); return; }
     const request = ++generation;
     if (controller) controller.abort();
     controller = new AbortController();
@@ -76,7 +79,7 @@
       if (request !== generation) return;
       if (!result.success) {
         quote.textContent = result.data?.message || 'Your quote is unavailable. Please try again.';
-        markTotal('invalid', 'Please check your dates or options below.', 'Unavailable');
+        markTotal('invalid', result.data?.message || 'Please check your dates or options below.', 'Unavailable');
         status.textContent = ''; return;
       }
       // This fragment is generated and escaped by the WordPress endpoint; it contains no customer HTML.
@@ -87,7 +90,7 @@
         const offer = panel.querySelector(`[data-evh-offer="${key}"]`);
         if (offer && result.data.offers?.[key]) offer.textContent = result.data.offers[key];
       }
-      status.textContent = `${result.data.available} vehicle(s) currently available. Availability is secured at checkout.`;
+      status.textContent = '';
       disable(false);
     } catch (error) {
       if (error.name === 'AbortError' || request !== generation) return;
@@ -96,11 +99,14 @@
       status.textContent = '';
     }
   }
-  panel.addEventListener('change', event => {
+  function selectionChanged(event) {
+    if (event.target.name?.endsWith('_time')) { delete event.target.dataset.saturdayAuto; delete event.target.dataset.weekdayTime; }
     if (event.target.name === 'evh_insurance' && event.target.checked) { panel.querySelector('[name="evh_own_insurance"]').checked = false; panel.querySelector('[name="evh_own_ack"]').checked = false; }
     if (event.target.name === 'evh_own_insurance' && event.target.checked) panel.querySelector('[name="evh_insurance"]').checked = false;
     generation++; if (controller) controller.abort();
     disable(true); markTotal('updating', 'Updating your total…'); clearTimeout(timer); adjust(); timer = setTimeout(update, 100);
-  });
+  }
+  panel.addEventListener('change', selectionChanged);
+  panel.addEventListener('input', event => { if (event.target.type === 'date' || event.target.name === 'evh_drivers') selectionChanged(event); });
   disable(true); adjust();
 })();
