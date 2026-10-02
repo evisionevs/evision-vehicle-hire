@@ -72,3 +72,13 @@
 .evh-booking .evh-own-insurance-note p, .evh-booking .evh-own-insurance-note label { font-size: inherit; line-height: inherit; }
 .evh-booking .evh-own-insurance-note ul { margin: .35rem 0 .5rem; padding-left: 1.1rem; font-size: inherit; line-height: inherit; }
 .evh-booking .evh-own-insurance-note li { margin: .15rem 0; }
+
+.evh-booking .evh-insurance-error[hidden] { display: none; }
+.evh-booking .evh-insurance .evh-insurance-error { color: #b0201c; font-size: .8rem; font-weight: 600; line-height: 1.4; margin: .45rem 0; }
+
+.evh-booking .evh-locations { font-size: .85rem; line-height: 1.4; margin: .75rem 0; }
+.evh-booking .evh-locations label { font-size: inherit; }
+.evh-booking .evh-locations select { font-size: .85rem; min-height: 38px; padding: .4rem; }
+.evh-booking .evh-return-same { margin: .5rem 0; }
+.evh-booking .evh-return-location[hidden], .evh-booking .evh-location-error[hidden] { display: none; }
+.evh-booking .evh-location-error { color: #b0201c; font-size: .8rem; line-height: 1.4; }
