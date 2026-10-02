@@ -1,0 +1,68 @@
+.evh-booking { margin: 1.25rem 0; padding: 1.25rem; border: 1px solid #ddd; border-radius: 10px; background: #fafafa; color: #222; width: 100%; box-sizing: border-box; }
+.evh-booking h3, .evh-booking h4 { margin: 0 0 .8rem; color: inherit; }
+.evh-booking .evh-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem; }
+.evh-booking label { display: block; font-weight: 500; }
+.evh-booking input[type=date], .evh-booking select { display: block; width: 100%; margin-top: .4rem; min-height: 44px; background: white; color: #222; border: 1px solid #84958a; border-radius: 4px; padding: .5rem; box-sizing: border-box; }
+.evh-booking input[type=checkbox] { width: 18px; height: 18px; margin-right: .4rem; vertical-align: middle; }
+.evh-booking fieldset { padding: .8rem; border: 1px solid #ddd; margin: 1rem 0; }
+.evh-booking legend { padding: 0 .4rem; font-weight: 700; }
+.evh-booking .evh-eligibility { padding: .9rem; background: #fff; border-left: 4px solid #d82c27; margin: 1rem 0; }
+.evh-booking .evh-deposit-note { margin: 1rem 0; padding: .75rem .9rem; background: #f5f5f5; border: 1px solid #ddd; border-radius: 5px; font-size: .85rem; line-height: 1.45; color: #444; }
+.evh-booking .evh-deposit-note strong, .evh-booking .evh-deposit-info, .evh-booking .evh-deposit-note small { display: block; }
+.evh-booking .evh-deposit-note strong { margin-bottom: .25rem; }
+.evh-booking .evh-deposit-note small { margin-top: .35rem; font-size: .8rem; }
+.evh-booking .evh-quote { padding: 1rem; background: #fff; border: 1px solid #ddd; border-radius: 6px; }
+.evh-booking .evh-form-note { font-size: .85rem; line-height: 1.4; color: #555; margin: .7rem 0 .3rem; }
+.evh-booking .evh-delivery-note { font-size: .9rem; line-height: 1.4; color: #444; margin: .3rem 0 1rem; }
+.evh-booking .evh-live-total { position: sticky; top: 12px; z-index: 10; padding: .9rem 1rem; background: #fff; border: 2px solid #d82c27; border-radius: 8px; box-shadow: 0 3px 12px #182b2115; }
+.evh-booking .evh-total-label, .evh-booking .evh-total-amount, .evh-booking .evh-total-state { display: block; }
+.evh-booking .evh-total-label { font-size: .9rem; font-weight: 600; }
+.evh-booking .evh-total-amount { font-size: clamp(1.35rem,3vw,1.85rem); line-height: 1.3; margin: .2rem 0; font-variant-numeric: tabular-nums; }
+.evh-booking .evh-total-state { font-size: .8rem; line-height: 1.4; color: #555; }
+.evh-booking .evh-live-total[data-state=updating] .evh-total-amount { opacity: .6; }
+.evh-booking .evh-quote-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(110px,auto); gap: .5rem 1rem; padding: .85rem 0; border-bottom: 1px solid #eee; }
+.evh-booking .evh-row-description, .evh-booking .evh-row-detail { display: block; }
+.evh-booking .evh-row-detail { font-size: .85rem; color: #555; margin-top: .25rem; line-height: 1.4; }
+.evh-booking .evh-row-amount { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.evh-booking .evh-row-amount small { display: block; font-weight: 400; }
+.evh-booking .evh-quote-total { display: grid; grid-template-columns: 1fr auto; gap: .4rem 1rem; padding: 1rem 0 .5rem; align-items: baseline; }
+.evh-booking .evh-quote-total strong { font-size: 1.4rem; text-align: right; }
+.evh-booking .evh-quote-total small { grid-column: 1 / -1; color: #555; }
+.evh-booking .evh-contract-summary { margin-top: 1rem; border-top: 1px solid #ddd; }
+.evh-booking small { display: inline; font-size: .85em; }
+.evh-booking .evh-status { font-size: .9em; margin-bottom: 0; }
+.evh-booking :focus-visible { outline: 3px solid #1a659e; outline-offset: 3px; }
+@media (max-width: 480px) { .evh-booking .evh-fields { grid-template-columns: 1fr; gap: 0; } .evh-booking { padding: .8rem; } .evh-booking .evh-quote-row { grid-template-columns: 1fr; } .evh-booking .evh-row-amount { text-align: left; } }
+
+.evh-rate-hint { display: block; margin-top: .3rem; font-size: .75em; font-weight: 400; line-height: 1.4; color: #555; }
+.evh-booking .evh-insurance { padding: .55rem .7rem; margin: .75rem 0; font-size: .85rem; line-height: 1.4; }
+.evh-booking .evh-insurance legend { font-size: .9rem; line-height: 1.4; }
+.evh-booking .evh-insurance p { margin: .4rem 0; font-size: inherit; line-height: inherit; }
+.evh-booking .evh-insurance label { font-size: inherit; line-height: inherit; }
+.evh-booking .evh-eligibility { padding: .55rem .7rem; margin: .75rem 0; font-size: .8rem; line-height: 1.4; border-left-width: 3px; }
+.evh-booking .evh-eligibility strong { font-size: .85rem; }
+.evh-booking .evh-eligibility p { margin: .35rem 0; font-size: inherit; line-height: inherit; }
+.evh-booking .evh-eligibility label { font-size: inherit; line-height: inherit; }
+.evh-booking .woocommerce-Price-currencySymbol { display: inline !important; visibility: visible !important; opacity: 1 !important; font-size: inherit; color: inherit; }
+
+.evh-booking, .evh-booking input, .evh-booking select, .evh-rate-hint { font-family: "Proxima Nova", Arial, sans-serif; }
+.evh-booking input[type=checkbox] { accent-color: #d82c27; }
+.evh-booking :focus-visible { outline-color: #d82c27; }
+
+.evh-booking .evh-quote { padding: .65rem .75rem; font-size: .8rem; line-height: 1.4; }
+.evh-booking .evh-quote h4 { font-size: .95rem; line-height: 1.3; margin: 0 0 .4rem; }
+.evh-booking .evh-quote p { font-size: inherit; line-height: inherit; margin: .4rem 0; }
+.evh-booking .evh-quote-row { gap: .3rem .65rem; padding: .45rem 0; }
+.evh-booking .evh-row-detail { font-size: .75rem; margin-top: .15rem; line-height: 1.35; }
+.evh-booking .evh-quote-total { padding: .6rem 0 .2rem; gap: .25rem .65rem; }
+.evh-booking .evh-quote-total strong { font-size: 1rem; line-height: 1.4; }
+.evh-booking .evh-contract-summary { margin-top: .6rem; }
+.evh-booking .evh-total-inc, .evh-booking .evh-total-ex { display: block; }
+.evh-booking .evh-total-ex { font-size: .8rem; font-weight: 400; line-height: 1.4; margin-top: .15rem; color: #555; }
+.evh-booking .evh-status, .evh-booking noscript p { font-size: .75rem; line-height: 1.4; }
+
+.evh-booking .evh-drivers[hidden] { display: none; }
+.evh-booking .evh-drivers input { width: 5rem; padding: .4rem; margin: .25rem 0; border: 1px solid #84958a; border-radius: 4px; }
+.evh-booking .evh-drivers small { display: block; font-size: .75rem; }
+.evh-booking .evh-insurance .evh-terms-note { font-size: .75rem; margin-top: .5rem; }
+.evh-booking .evh-terms-note a { color: #d82c27; text-decoration: underline; }
