@@ -27,7 +27,6 @@ final class EVH_Plugin {
         add_action('woocommerce_checkout_create_order_line_item', array(__CLASS__, 'order_item'), 20, 4);
         add_action('woocommerce_checkout_order_created', array(__CLASS__, 'order_created'));
         add_action('woocommerce_order_status_changed', array(__CLASS__, 'status_changed'), 20, 4);
-        // Reserve before the corresponding transactional emails are triggered.
         foreach (array('processing', 'completed', 'on-hold') as $state) {
             add_action('woocommerce_order_status_' . $state, function($id, $order) use ($state) {
                 self::status_changed($id, '', $state, $order);
@@ -51,7 +50,6 @@ final class EVH_Plugin {
         }, 20, 3);
         add_action('evh_refresh_holidays', array(__CLASS__, 'refresh_holidays'));
         if (!wp_next_scheduled('evh_refresh_holidays')) { wp_schedule_event(time() + 60, 'daily', 'evh_refresh_holidays'); }
-        // No rental checkout via the Store API in this first version: it lacks the classic reservation lifecycle.
         add_filter('rest_pre_dispatch', array(__CLASS__, 'block_store_api'), 10, 3);
     }
 
@@ -132,7 +130,6 @@ final class EVH_Plugin {
         EVH_Storage::ready();
     }
 
-    /** Parse scalar fields only and use a closed set of flags. */
     public static function input(array $source): array {
         $input = array();
         foreach (array('start', 'end', 'start_time', 'end_time', 'payment') as $field) {
@@ -179,11 +176,11 @@ final class EVH_Plugin {
         if ($require_eligible && !empty($input['own_insurance']) && empty($input['own_ack'])) { throw new RuntimeException('Please acknowledge the requirements for providing your own insurance.'); }
         EVH_Rules::date($input['start'] ?? ''); EVH_Rules::date($input['end'] ?? '');
         self::ensure_calendar($input['start']); self::ensure_calendar($input['end']);
-        $result = EVH_Rules::quote($input, self::rates($product), (int)$product->get_meta('_evh_notice'), self::now(), array(__CLASS__, 'closed'), (float) self::option('out_fee', 25));
+        $result = EVH_Rules::quote($input, self::rates($product), (int) $product->get_meta('_evh_notice'), self::now(), array(__CLASS__, 'closed'), (float) self::option('out_fee', 25));
         if ($require_eligible && $result['extras'] && empty($input['eligible'])) {
             throw new RuntimeException('Please confirm the driver eligibility and permitted use requirements for our insurance.');
         }
-        if ($availability && EVH_Storage::available($id, $input['start'],$input['end']) < 1) {
+        if ($availability && EVH_Storage::available($id, $input['start'], $input['end']) < 1) {
             throw new RuntimeException('No vehicles are available for the whole selected period. Please choose other dates or another vehicle.');
         }
         return $result;
@@ -192,13 +189,15 @@ final class EVH_Plugin {
     public static function eligibility($product): string {
         $age = max(21, (int) ($product->get_meta('_evh_min_age') ?: 30));
         $years = max(1, (int) ($product->get_meta('_evh_licence_years') ?: 5));
-        return 'All drivers must be aged ' . $age . '+, have held a driving licence for a minimum of ' .$years . ' years and have no more than 6 points on their licence. Our insurance cannot be used for couriers, chauffeurs or hire companies hiring our car or van to a third party.';
+        return 'All drivers must be aged ' . $age . '+, have held a driving licence for a minimum of ' . $years . ' years and have no more than 6 points on their licence. Our insurance cannot be used for couriers, chauffeurs or hire companies hiring our car or van to a third party.';
     }
 
-    public static function deposit_amount($product, bool $evision): ?float {$value = $product->get_meta($evision ? '_evh_deposit_evision' : '_evh_deposit_own');
-        return is_numeric($value) && is_finite((float)$value) && (float) $value > 0 ? (float)$value : null;
+    public static function deposit_amount($product, bool $evision): ?float {
+        $value = $product->get_meta($evision ? '_evh_deposit_evision' : '_evh_deposit_own');
+        return is_numeric($value) && is_finite((float) $value) && (float) $value > 0 ? (float) $value : null;
     }
-    public static function deposit_message($product, bool $evision): string {$amount = self::deposit_amount($product,$evision);
+    public static function deposit_message($product, bool $evision): string {
+        $amount = self::deposit_amount($product, $evision);
         if ($amount === null) { return 'A refundable damage deposit is required before collection, separately from today’s payment. See Insurance Information on this vehicle’s page for the deposit and excess amounts.'; }
         $money = html_entity_decode(wp_strip_all_tags(wc_price($amount)), ENT_QUOTES, 'UTF-8');
         return 'A refundable damage deposit of ' . $money . ' is required before collection, separately from today’s payment.';
@@ -215,7 +214,8 @@ final class EVH_Plugin {
 
     public static function form(): void {
         global $product;
-        if (!self::enabled($product)) { return; }$out_fee_formatted = html_entity_decode(wp_strip_all_tags(wc_price(self::option('out_fee', 25))), ENT_QUOTES, 'UTF-8');
+        if (!self::enabled($product)) { return; }
+        $out_fee_formatted = html_entity_decode(wp_strip_all_tags(wc_price(self::option('out_fee', 25))), ENT_QUOTES, 'UTF-8');
         $rates = self::rates($product);
 
         $band_custom_labels = array(
@@ -240,13 +240,18 @@ final class EVH_Plugin {
 
         echo '<div class="evh-tier-grid">';
         
-        foreach (EVH_Rules::BANDS as $band) {$key = $band['key'];$value = $rates[$key] ?? null;
+        foreach (EVH_Rules::BANDS as $band) {
+            $key = $band['key'];
+            $value = $rates[$key] ?? null;
             if (!is_numeric($value) || (float)$value <= 0) { continue; }
             
-            $ex_vat = (float)$value;
-            $inc_vat = self::gross($ex_vat, $product);$ex_daily = $band['unit'] === 'day' ?$ex_vat : ($band['unit'] === 'week' ?$ex_vat / 7 : $ex_vat * 12 / 365);$inc_daily = self::gross($ex_daily,$product);
+            $ex_vat = (float) $value;
+            $inc_vat = self::gross($ex_vat, $product);
+            
+            $ex_daily = $band['unit'] === 'day' ? $ex_vat : ($band['unit'] === 'week' ? $ex_vat / 7 : $ex_vat * 12 / 365);
+            $inc_daily = self::gross($ex_daily, $product);
 
-            $meta = $band_custom_labels[$key] ?? array('period' => $band['label'], 'title' => 'Hire Rate', 'unit_label' =>$band['unit']);
+            $meta = $band_custom_labels[$key] ?? array('period' => $band['label'], 'title' => 'Hire Rate', 'unit_label' => $band['unit']);
             
             $inc_formatted = html_entity_decode(wp_strip_all_tags(wc_price($inc_vat)), ENT_QUOTES, 'UTF-8');
             $ex_formatted  = html_entity_decode(wp_strip_all_tags(wc_price($ex_vat)), ENT_QUOTES, 'UTF-8');
@@ -255,7 +260,7 @@ final class EVH_Plugin {
             $ex_daily_formatted  = html_entity_decode(wp_strip_all_tags(wc_price($ex_daily)), ENT_QUOTES, 'UTF-8');
 
             echo '<div class="evh-tier-card" ' .
-                 'data-inc-base="' . esc_attr($inc_formatted . ' / ' .$meta['unit_label']) . '" ' .
+                 'data-inc-base="' . esc_attr($inc_formatted . ' / ' . $meta['unit_label']) . '" ' .
                  'data-bus-base="Business Rate ' . esc_attr($ex_formatted) . ' + VAT (20%) / ' . esc_attr($meta['unit_label']) . '" ' .
                  'data-inc-daily="' . esc_attr($inc_daily_formatted . ' / Day (equiv.)') . '" ' .
                  'data-bus-daily="Business Rate ' . esc_attr($ex_daily_formatted) . ' + VAT (20%) / Day (equiv.)">';
@@ -267,10 +272,9 @@ final class EVH_Plugin {
             echo '</div>';
         }
         
-        echo '</div>'; // .evh-tier-grid
-        echo '</div>'; // .evh-rate-table-wrapper
+        echo '</div>';
+        echo '</div>';
         echo '</details>';
-        // --- End Rate Accordion ---
 
         echo '<div class="evh-live-total" data-state="empty" role="status" aria-live="polite" aria-atomic="true"><span class="evh-total-label">Total payable today</span><strong class="evh-total-amount">Select your dates</strong><small class="evh-total-state">Your total will update as you select your options.</small></div>';
         echo '<p class="evh-form-note">Dates and times use UK local time.</p><p class="evh-delivery-note">Vehicle delivery is available to add at checkout.</p>';
@@ -281,10 +285,11 @@ final class EVH_Plugin {
         self::location_select('return_location');
         echo '</div><p id="evh-location-error" class="evh-location-error" role="alert" hidden></p></div>';
         $min = self::now()->format('Y-m-d');
-        foreach (array('start' => 'Collection', 'end' => 'Return') as $key =>$label) {
+        foreach (array('start' => 'Collection', 'end' => 'Return') as $key => $label) {
             echo '<div class="evh-fields"><p><label for="evh_' . esc_attr($key) . '">' . esc_html($label) . ' date</label><input type="date" id="evh_' . esc_attr($key) . '" name="evh_' . esc_attr($key) . '" min="' . esc_attr($min) . '" required></p>';
             echo '<p><label for="evh_' . esc_attr($key) . '_time">' . esc_html($label) . ' time</label><select id="evh_' . esc_attr($key) . '_time" name="evh_' . esc_attr($key) . '_time">';
-            for ($minutes = 480; $minutes <= 1080; $minutes += 15) {$time = sprintf('%02d:%02d', intdiv($minutes, 60),$minutes % 60);
+            for ($minutes = 480; $minutes <= 1080; $minutes += 15) {
+                $time = sprintf('%02d:%02d', intdiv($minutes, 60), $minutes % 60);
                 echo '<option value="' . esc_attr($time) . '"' . selected($time, '09:00', false) . '>' . esc_html($time) . '</option>';
             }
             echo '<option value="out">Out of hours: team to arrange (+' . esc_html($out_fee_formatted) . ' ex VAT)</option></select></p></div>';
@@ -302,3 +307,281 @@ final class EVH_Plugin {
         echo '<p><label><input type="checkbox" name="evh_overseas" value="1"> International Insurance Required</label></p><p class="evh-terms-note">Full Terms and Conditions can be found <a href="https://www.evisionevs.co.uk/terms-conditions/" target="_blank" rel="noopener noreferrer">here</a>.</p></fieldset>';
         echo '<aside class="evh-deposit-note" data-own="' . esc_attr(self::deposit_amount($product, false) ?? '') . '" data-evision="' . esc_attr(self::deposit_amount($product, true) ?? '') . '"><strong>Refundable damage deposit</strong><span class="evh-deposit-info">' . esc_html(self::deposit_message($product, false)) . '</span><small>Processed for return approximately 7–10 days after the hire ends, subject to satisfactory vehicle condition.</small></aside>';
         echo '<div class="evh-eligibility"><strong>Driver and insurance requirements</strong><p>' . esc_html(self::eligibility($product)) . '</p>';
+        echo '<label><input type="checkbox" name="evh_eligible" value="1"> I confirm these requirements are met if I select your insurance.</label></div>';
+        echo '<div class="evh-quote" aria-live="polite" aria-atomic="true">Choose your dates to see your quote.</div>';
+        echo '<p class="evh-status" role="status"></p><noscript><p>Enable JavaScript to preview your quote. Your selection is always checked again at checkout.</p></noscript></section>';
+    }
+
+    private static function location_select(string $field): void {
+        echo '<select id="evh_' . esc_attr($field) . '" name="evh_' . esc_attr($field) . '" aria-describedby="evh-location-error"' . ($field === 'collection_location' ? ' required' : '') . '><option value="">Select a location</option>';
+        foreach (self::LOCATIONS as $key => $label) {
+            if ($key === 'delivery') { $label = $field === 'collection_location' ? 'I will require delivery of the vehicle (quoted at checkout)' : 'I will require collection of the vehicle (quoted at checkout)'; }
+            echo '<option value="' . esc_attr($key) . '">' . esc_html($label) . '</option>';
+        }
+        echo '</select>';
+    }
+
+    public static function money_pair(float $ex, $p): string {
+        $gross = wc_get_price_including_tax($p, array('qty' => 1, 'price' => self::base_price($ex)));
+        return wp_kses_post(wc_price($gross)) . ' inc VAT <small>(' . wp_kses_post(wc_price($ex)) . ' ex VAT)</small>';
+    }
+    public static function plain_money(float $amount): string {
+        return html_entity_decode(wp_strip_all_tags(wc_price($amount)), ENT_QUOTES, 'UTF-8');
+    }
+    public static function base_price(float $ex): float { return wc_prices_include_tax() ? $ex * 1.2 : $ex; }
+    public static function gross(float $ex, $p): float { return (float) wc_get_price_including_tax($p, array('price' => self::base_price($ex), 'qty' => 1)); }
+
+    public static function total_today(array $q, $p): float {
+        return self::gross($q['rental_due'] + $q['fees'], $p) + $q['extras_due'];
+    }
+    public static function total_today_html(array $q, $p): string {
+        $ex = $q['rental_due'] + $q['fees'] + $q['extras_due'];
+        return '<span class="evh-total-inc">' . wp_kses_post(wc_price(self::total_today($q, $p))) . ' inc VAT</span><small class="evh-total-ex">' . wp_kses_post(wc_price($ex)) . ' ex VAT</small>';
+    }
+    private static function quote_row(string $label, string $amount, string $detail = ''): string {
+        return '<div class="evh-quote-row"><div class="evh-row-description"><strong>' . esc_html($label) . '</strong>' . ($detail !== '' ? '<span class="evh-row-detail">' . $detail . '</span>' : '') . '</div><div class="evh-row-amount">' . $amount . '</div></div>';
+    }
+
+    public static function quote_html(array $q, $p): string {
+        $days = $q['days'];
+        $html = '<h4>Your hire quotation</h4><p class="evh-insurance-summary">Vehicle insurance: ' . (!empty($q['input']['insurance']) ? 'EVision insurance selected' : (!empty($q['input']['own_insurance']) ? 'You will provide your own insurance' : 'Please choose your insurance cover')) . '</p><p>' . esc_html($days . ' chargeable day' . ($days === 1 ? '' : 's')) . '</p>';
+        foreach (array('collection_location' => 'Collection', 'return_location' => 'Return') as $field => $label) {
+            if (!empty($q['input'][$field]) && isset(self::LOCATIONS[$q['input'][$field]])) { $html .= '<p class="evh-location-summary">' . esc_html($label . ': ' . self::LOCATIONS[$q['input'][$field]]) . '</p>'; }
+        }
+        if (($q['input']['collection_location'] ?? '') === 'delivery' || ($q['input']['return_location'] ?? '') === 'delivery') { $html .= '<p class="evh-delivery-summary">Delivery/collection will be quoted at checkout and is not included in this hire total.</p>'; }
+        if ($days >= 30) { $html .= '<p><strong>' . self::money_pair($q['monthly'], $p) . ' per month</strong></p>'; }
+        $html .= '<p>' . self::money_pair($q['daily'], $p) . ' per day</p>';
+        $first = $q['payment'] === 'first';
+        $detail = $first ? 'First month of your hire' : esc_html($days . ' × ') . wp_kses_post(wc_price($q['daily'])) . ' per day, ex VAT';
+        $html .= '<div class="evh-breakdown">' . self::quote_row($first ? 'Vehicle hire: first payment' : 'Vehicle hire', self::money_pair($q['rental_due'], $p), $detail);
+        foreach ($q['extras'] as $key => $extra) {
+            $detail = $first && $q['remaining'] > 0 ? 'First month at ' . wp_kses_post(wc_price($extra['daily'])) . ' per day' : esc_html($days . ' × ') . wp_kses_post(wc_price($extra['daily'])) . ' per day';
+            if ($key === 'insurance') { $detail = esc_html(($q['input']['drivers'] ?? 1) . ' insured driver(s), combined cost: ') . $detail; }
+            $detail .= '<span class="evh-row-detail">No VAT</span>';
+            if ($first && $q['remaining'] > 0) {
+                $detail .= '<span class="evh-row-detail">Full hire: ' . esc_html($days . ' × ') . wp_kses_post(wc_price($extra['daily'])) . ' = ' . wp_kses_post(wc_price($extra['total'])) . '</span>';
+            }
+            $html .= self::quote_row(self::EXTRA_LABELS[$key], wp_kses_post(wc_price($extra['due'])), $detail);
+        }
+        foreach (array('start' => 'Collection', 'end' => 'Return') as $key => $label) {
+            if ($q['input'][$key . '_time'] !== 'out') { continue; }
+            $html .= self::quote_row('Out-of-hours ' . strtolower($label), self::money_pair($q['fee_each'], $p), 'Our team will contact you to arrange the appointment time.');
+        }
+        $contract = self::gross($q['rental_total'] + $q['fees'], $p) + $q['extras_total'];
+        $html .= '</div><div class="evh-quote-total"><span>Total payable today</span><strong>' . self::total_today_html($q, $p) . '</strong><small>Includes VAT where applicable. Insurance has no VAT.</small></div>';
+        if ($q['payment'] === 'first' && $q['remaining'] > 0) {
+            $remaining = self::gross($q['remaining'], $p) + $q['extras_total'] - $q['extras_due'];
+            $html .= '<div class="evh-contract-summary">' . self::quote_row('Full contract value including selected extras', wp_kses_post(wc_price($contract))) . self::quote_row('Remaining contract balance', wp_kses_post(wc_price($remaining))) . '</div><p>You are paying for the first month of your hire today. Our accounts department will contact you to arrange Direct Debit payments for the remaining term of your hire contract. Final payments will be adjusted to the agreed contract total.</p>';
+        }
+        return $html;
+    }
+
+    public static function ajax_quote(): void {
+        nocache_headers();
+        if (!check_ajax_referer('evh_quote', 'nonce', false)) { wp_send_json_error(array('message' => 'Please refresh the page and try again.'), 403); }
+        $ip = isset($_SERVER['REMOTE_ADDR']) && is_scalar($_SERVER['REMOTE_ADDR']) ? (string) $_SERVER['REMOTE_ADDR'] : 'unknown';
+        $bucket = 'evh_q_' . substr(hash_hmac('sha256', $ip . ':' . intdiv(time(), 60), wp_salt('nonce')), 0, 32);
+        $requests = (int) get_transient($bucket);
+        if ($requests >= 60) { wp_send_json_error(array('message' => 'Please wait a minute before requesting another quote.'), 429); }
+        set_transient($bucket, $requests + 1, 120);
+        try {
+            $id = isset($_POST['product_id']) && is_scalar($_POST['product_id']) ? absint($_POST['product_id']) : 0;
+            $input = self::input($_POST);
+            $q = self::quote($id, $input);
+            $multiplier = $input['overseas'] ? 2 : 1;
+            $offer = self::plain_money($q['daily'] * 0.5 * $multiplier) . ' per driver per day (no VAT)';
+            if ($q['days'] >= 30) { $offer = self::plain_money($q['monthly'] * 0.5 * $multiplier) . ' per driver per month; ' . $offer; }
+            wp_send_json_success(array('html' => self::quote_html($q, wc_get_product($id)), 'days' => $q['days'],
+                'total_today_html' => self::total_today_html($q, wc_get_product($id)), 'payment' => $q['payment'],
+                'offers' => array('insurance' => $offer, 'tyre' => self::plain_money(4 * $multiplier) . ' per day (no VAT)', 'screen' => self::plain_money(4 * $multiplier) . ' per day (no VAT)')));
+        } catch (Throwable $e) { wp_send_json_error(array('message' => $e instanceof RuntimeException ? $e->getMessage() : 'The quotation could not be calculated. Please contact our team.'), 400); }
+    }
+
+    public static function add_validation($passed, $id, $quantity, $variation_id = 0, $variations = array(), $data = array()) {
+        $p = wc_get_product($id);
+        if (!self::enabled($p)) { return $passed; }
+        try {
+            if ((float) $quantity !== 1.0 || $variation_id) { throw new RuntimeException('Add one vehicle per hire selection.'); }
+            $nonce = $_POST['evh_nonce'] ?? '';
+            if (!is_scalar($nonce) || !wp_verify_nonce(sanitize_text_field(wp_unslash($nonce)), 'evh_booking')) { throw new RuntimeException('Please select your hire details on the vehicle page.'); }
+            self::quote($id, self::input($_POST), true, true);
+        } catch (Throwable $e) {
+            wc_add_notice($e instanceof RuntimeException ? $e->getMessage() : 'Your booking could not be checked. Please try again.', 'error');
+            return false;
+        }
+        return $passed;
+    }
+    public static function cart_data($data, $id, $variation_id, $quantity): array {
+        if (!self::enabled(wc_get_product($id))) { return $data; }
+        $data['evh_input'] = self::input($_POST);
+        $data['evh_unique'] = wp_generate_uuid4();
+        return $data;
+    }
+
+    public static function prices($cart): void {
+        if (is_admin() && !wp_doing_ajax()) { return; }
+        foreach ($cart->get_cart() as $key => $item) {
+            if (!isset($item['evh_input'])) { continue; }
+            try {
+                $q = self::quote((int) $item['product_id'], $item['evh_input'], false, true);
+                $cart->cart_contents[$key]['evh_quote'] = $q;
+                unset($cart->cart_contents[$key]['evh_error']);
+                $cart->cart_contents[$key]['data'] = clone $item['data'];
+                $cart->cart_contents[$key]['data']->set_price(self::base_price($q['rental_due']));
+                $cart->cart_contents[$key]['data']->set_tax_status('taxable');
+                $cart->cart_contents[$key]['data']->set_tax_class(self::TAX_CLASS);
+            } catch (Throwable $e) {
+                $cart->cart_contents[$key]['evh_error'] = $e instanceof RuntimeException ? $e->getMessage() : 'Hire quotation is unavailable.';
+                unset($cart->cart_contents[$key]['evh_quote']);
+            }
+        }
+    }
+    public static function fees($cart): void {
+        $number = 0;
+        foreach ($cart->get_cart() as $key => $item) {
+            $q = $item['evh_quote'] ?? null;
+            if (!$q) { continue; }
+            $suffix = ' · ' . $item['data']->get_name() . ' · ' . $q['input']['start'] . ' · Hire ' . (++$number);
+            foreach (array('start' => 'Out-of-hours collection', 'end' => 'Out-of-hours return') as $endpoint => $label) {
+                if ($q['input'][$endpoint . '_time'] === 'out') { $cart->add_fee($label . $suffix, $q['fee_each'], true, self::TAX_CLASS); }
+            }
+            foreach ($q['extras'] as $extra_key => $extra) { $cart->add_fee(self::EXTRA_LABELS[$extra_key] . ' (no VAT)' . $suffix, $extra['due'], false); }
+        }
+    }
+    public static function check_cart(): void {
+        if (!WC()->cart) { return; }
+        $groups = array();
+        try {
+            foreach (WC()->cart->get_cart() as $item) {
+                if (!self::enabled($item['data']) && !isset($item['evh_input'])) { continue; }
+                if (!isset($item['evh_input']) || (int) $item['quantity'] !== 1 || (float) $item['quantity'] !== 1.0) { throw new RuntimeException('Please remove this vehicle and select its hire details again.'); }
+                self::quote((int) $item['product_id'], $item['evh_input'], false, true);
+                $groups[$item['product_id']][] = array('start_date' => $item['evh_input']['start'], 'end_date' => $item['evh_input']['end'], 'quantity' => 1);
+            }
+            foreach ($groups as $id => $rows) {
+                $start = min(array_column($rows, 'start_date')); $end = max(array_column($rows, 'end_date'));
+                $all = array_merge(EVH_Storage::active((int) $id, $start, $end), $rows);
+                if (EVH_Rules::peak($all, $start, $end) > (int) get_post_meta($id, '_evh_capacity', true)) { throw new RuntimeException('There are not enough vehicles for all the hires in your basket. Please remove a hire or change dates.'); }
+            }
+        } catch (Throwable $e) { wc_add_notice($e instanceof RuntimeException ? $e->getMessage() : 'Hire availability could not be verified.', 'error'); }
+    }
+
+    public static function item_data($data, $item): array {
+        if (empty($item['evh_input'])) { return $data; }
+        $input = $item['evh_input'];
+        foreach (array('start' => 'Collection', 'end' => 'Return') as $key => $label) {
+            $data[] = array('key' => $label, 'value' => $input[$key] . ' ' . ($input[$key . '_time'] === 'out' ? '(out of hours, time to be agreed)' : $input[$key . '_time']));
+        }
+        foreach (array('collection_location' => 'Collection location', 'return_location' => 'Return location') as $field => $label) {
+            if (!empty($input[$field]) && isset(self::LOCATIONS[$input[$field]])) { $data[] = array('key' => $label, 'value' => self::LOCATIONS[$input[$field]]); }
+        }
+        $q = $item['evh_quote'] ?? null;
+        if ($q) {
+            $data[] = array('key' => 'Refundable damage deposit', 'value' => self::deposit_message($item['data'], !empty($input['insurance'])));
+            $data[] = array('key' => 'Vehicle insurance', 'value' => !empty($input['insurance']) ? 'EVision insurance selected' : (!empty($input['own_insurance']) ? 'Customer will provide own insurance' : 'Not selected'));
+            if (!empty($input['own_insurance'])) { $data[] = array('key' => 'Own-insurance requirements acknowledged', 'value' => !empty($input['own_ack']) ? 'Yes' : 'No'); }
+            if (!empty($input['insurance'])) { $data[] = array('key' => 'Insured drivers', 'value' => (string) ($input['drivers'] ?? 1)); }
+            $data[] = array('key' => 'Hire length', 'value' => $q['days'] . ' days');
+            $data[] = array('key' => 'Payment', 'value' => $q['payment'] === 'first' ? 'First month only; accounts team will arrange Direct Debit' : 'Full hire amount');
+            $data[] = array('key' => 'Daily rental rate', 'value' => wp_strip_all_tags(self::money_pair($q['daily'], $item['data'])));
+            if ($q['days'] >= 30) { $data[] = array('key' => 'Monthly rental rate', 'value' => wp_strip_all_tags(self::money_pair($q['monthly'], $item['data']))); }
+            $data[] = array('key' => 'Full contract value incl VAT and extras', 'value' => wp_strip_all_tags(wc_price(self::gross($q['rental_total'] + $q['fees'], $item['data']) + $q['extras_total'])));
+            $data[] = array('key' => 'International Insurance Required', 'value' => $input['overseas'] ? 'Yes; insurance charges doubled' : 'No');
+        }
+        return $data;
+    }
+
+    public static function order_item($item, $key, $values, $order): void {
+        if (empty($values['evh_input'])) { return; }
+        $q = self::quote((int) $values['product_id'], $values['evh_input'], false, true);
+        $item->add_meta_data('_evh_quote', $q, true);
+        foreach (self::item_data(array(), array_merge($values, array('evh_quote' => $q))) as $row) { $item->add_meta_data($row['key'], $row['value'], true); }
+        $item->add_meta_data('Driver requirements', self::eligibility($values['data']), true);
+        $item->add_meta_data('Insurance eligibility confirmed', $q['input']['eligible'] ? 'Yes' : 'No insurance selected', true);
+        if ($q['extras']) {
+            $item->add_meta_data('Insurance contract total (no VAT)', wc_format_decimal($q['extras_total'], 2), true);
+            $item->add_meta_data('Insurance payable today (no VAT)', wc_format_decimal($q['extras_due'], 2), true);
+        }
+    }
+
+    public static function order_created($order): void {
+        if (!self::has_hire($order)) { return; }
+        try { EVH_Storage::reserve_order($order); }
+        catch (Throwable $e) {
+            $order->update_status('failed', 'EVision reservation could not be secured. No payment should be initiated.');
+            throw new Exception($e instanceof RuntimeException ? $e->getMessage() : 'Reservation could not be secured. Please try again.');
+        }
+    }
+    public static function before_pay($order): void {
+        if (!self::has_hire($order)) { return; }
+        self::ready();
+        foreach ($order->get_items() as $item) {
+            $q = $item->get_meta('_evh_quote');
+            if ($q) { self::quote((int) $item->get_product_id(), $q['input'], false, true); }
+        }
+        EVH_Storage::reserve_order($order);
+    }
+    public static function status_changed($id, $from, $to, $order): void {
+        if (self::$status_guard || !self::has_hire($order)) { return; }
+        if ($from !== '' && in_array($to, array('processing', 'completed', 'on-hold'), true)) { return; }
+        if ($order->get_status() !== $to) { return; }
+        try {
+            if (in_array($to, array('cancelled', 'failed', 'refunded'), true)) { EVH_Storage::release_order((int) $id); }
+            elseif (in_array($to, array('processing', 'completed', 'on-hold'), true)) {
+                EVH_Storage::reserve_order($order, true);
+                $order->delete_meta_data('_evh_allocation_conflict'); $order->save();
+            }
+        } catch (Throwable $e) {
+            self::$status_guard = true;
+            $order->update_meta_data('_evh_allocation_conflict', 'yes');
+            $order->save();
+            $order->update_status('on-hold', 'URGENT: EVision availability could not be reserved. Do not confirm collection. Review payment and allocate a vehicle or refund manually. ' . ($e instanceof RuntimeException ? $e->getMessage() : 'Storage error.'));
+            self::$status_guard = false;
+            $mailer = WC()->mailer();
+            $mailer->send(get_option('admin_email'), 'EVision booking allocation requires attention: order ' . $order->get_order_number(), 'Order ' . $order->get_order_number() . ' requires manual review. Availability could not be secured. Check the order notes before confirming collection.');
+        }
+    }
+
+    public static function quantity($args, $p): array { if (self::enabled($p)) { $args['min_value'] = 1; $args['max_value'] = 1; } return $args; }
+    public static function update_quantity($passed, $key, $values, $quantity) {
+        if (isset($values['evh_input']) && (float) $quantity !== 0.0 && (float) $quantity !== 1.0) { wc_add_notice('Each hire selection reserves one vehicle. Add another selection for an additional vehicle.', 'error'); return false; }
+        return $passed;
+    }
+    public static function coupon($valid, $coupon) {
+        if (WC()->cart) { foreach (WC()->cart->get_cart() as $item) { if (isset($item['evh_input'])) { throw new Exception('Coupons are unavailable for vehicle-hire bookings in this version.'); } } }
+        return $valid;
+    }
+    public static function purchasable($valid, $p) {
+        if ($p->get_meta('_evh_configured') === 'yes' && !self::enabled($p)) { return false; }
+        return self::enabled($p) ? ($p->get_status() === 'publish' && (int) $p->get_meta('_evh_capacity') > 0) : $valid;
+    }
+    public static function price_html($html, $p): string {
+        if ($p->get_meta('_evh_configured') === 'yes' && !self::enabled($p)) { return 'Online hire is unavailable. Please contact our team.'; }
+        if (!self::enabled($p)) { return $html; }
+        $daily = array();
+        foreach (EVH_Rules::BANDS as $b) {
+            try { $q = EVH_Rules::price($b['min'], self::rates($p), 'full'); $daily[] = $q['daily']; } catch (Throwable $e) { continue; }
+        }
+        return $daily ? 'From ' . self::money_pair(min($daily), $p) . ' per day.<small class="evh-rate-hint">Select dates for your rate.</small>' : 'Select dates or contact us for a quotation.';
+    }
+    public static function order_message($order, $sent_to_admin = false, $plain = false, $email = null): void {
+        if (!self::has_hire($order)) { return; }
+        $messages = array();
+        if ($order->get_meta('_evh_allocation_conflict')) { $messages[] = 'Your booking is awaiting manual availability review. Please contact our team before travelling to collect.'; }
+        foreach ($order->get_items() as $item) {
+            $q = $item->get_meta('_evh_quote');
+            if (!$q) { continue; }
+            if ($q['payment'] === 'first' && $q['remaining'] > 0) { $messages[] = 'For ' . $item->get_name() . ', your online payment covers the first month. Our accounts department will contact you to arrange Direct Debit for the remaining contract term. Selected insurance follows the same payment period; final payments are reconciled to the agreed contract total.'; }
+            if ($q['out_count']) { $messages[] = 'Out-of-hours appointments require agreement. Our team will contact you to arrange the time. Please do not travel until the appointment is agreed.'; }
+        }
+        foreach (array_unique($messages) as $message) { echo $plain ? esc_html($message) . "\n\n" : '<p>' . esc_html($message) . '</p>'; }
+    }
+    public static function block_store_api($result, $server, $request) {
+        if (strpos($request->get_route(), '/wc/store/') !== 0) { return $result; }
+        $id = absint($request->get_param('id'));
+        $rental = $id && self::enabled(wc_get_product($id));
+        if (WC()->cart) { foreach (WC()->cart->get_cart() as $item) { if (isset($item['evh_input'])) { $rental = true; break; } } }
+        if ($rental) { return new WP_Error('evh_classic_checkout_required', 'Please use the classic basket and checkout for vehicle hire.', array('status' => 400)); }
+        return $result;
+    }
+}
