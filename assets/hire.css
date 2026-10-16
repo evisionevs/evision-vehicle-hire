@@ -96,3 +96,88 @@
   border-radius: 6px;
   box-shadow: 0 2px 8px rgba(216, 44, 39, 0.15);
 }
+
+/* Rate Accordion & Tier Cards */
+.evh-rate-accordion {
+  margin-bottom: 1rem;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.evh-rate-summary {
+  padding: .65rem .85rem;
+  font-size: .85rem;
+  font-weight: 600;
+  color: #222;
+  cursor: pointer;
+  background: #fdfdfd;
+  user-select: none;
+  transition: background .15s ease;
+}
+.evh-rate-summary:hover {
+  background: #f2f2f2;
+  color: #d82c27;
+}
+.evh-rate-accordion[open] .evh-rate-summary {
+  border-bottom: 1px solid #ddd;
+  background: #f7f7f7;
+}
+.evh-rate-table-wrapper {
+  padding: .75rem;
+}
+.evh-rate-toggle-bar {
+  margin-bottom: .75rem;
+  padding-bottom: .5rem;
+  border-bottom: 1px solid #eee;
+}
+.evh-rate-toggle-label {
+  font-size: .8rem;
+  font-weight: 600;
+  color: #444;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+.evh-rate-toggle-label input {
+  margin-right: .4rem;
+}
+.evh-tier-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: .75rem;
+}
+.evh-tier-card {
+  border: 1px solid #eee;
+  border-radius: 6px;
+  padding: .65rem .75rem;
+  background: #fafafa;
+  border-left: 3px solid #d82c27;
+}
+.evh-tier-period {
+  font-size: .75rem;
+  font-weight: 700;
+  color: #d82c27;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+.evh-tier-title {
+  font-size: .9rem;
+  font-weight: 600;
+  color: #222;
+  margin: .1rem 0 .25rem;
+}
+.evh-tier-price-inc {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #111;
+}
+.evh-tier-price-bus {
+  font-size: .75rem;
+  color: #555;
+  margin-top: .2rem;
+  line-height: 1.35;
+}
+@media (max-width: 480px) {
+  .evh-tier-grid { grid-template-columns: 1fr; }
+}
