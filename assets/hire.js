@@ -117,7 +117,6 @@
         status.textContent = ''; return;
       }
       quote.classList.remove('evh-error-message');
-      // This fragment is generated and escaped by the WordPress endpoint; it contains no customer HTML.
       quote.innerHTML = result.data.html;
       if (totalAmount && result.data.total_today_html) totalAmount.innerHTML = result.data.total_today_html;
       markTotal('ready', result.data.payment === 'first' ? 'First payment, including selected extras and VAT where applicable.' : 'Full hire payment, including selected extras and VAT where applicable.');
@@ -144,5 +143,25 @@
   }
   panel.addEventListener('change', selectionChanged);
   panel.addEventListener('input', event => { if (event.target.type === 'date' || event.target.name === 'evh_drivers') selectionChanged(event); });
+  
+  // Handle daily rate toggle inside accordion
+  const rateToggle = panel.querySelector('.evh-toggle-daily-rate');
+  if (rateToggle) {
+    rateToggle.addEventListener('change', event => {
+      const showDaily = event.target.checked;
+      for (const card of panel.querySelectorAll('.evh-tier-card')) {
+        const incEl = card.querySelector('.evh-tier-price-inc');
+        const busEl = card.querySelector('.evh-tier-price-bus');
+        if (showDaily) {
+          incEl.textContent = card.dataset.incDaily;
+          busEl.textContent = card.dataset.busDaily;
+        } else {
+          incEl.textContent = card.dataset.incBase;
+          busEl.textContent = card.dataset.busBase;
+        }
+      }
+    });
+  }
+
   disable(true); adjust();
 })();
