@@ -2,6 +2,7 @@
 defined('ABSPATH') || exit;
 
 final class EVH_Storage {
+
     public static function table(): string {
         global $wpdb;
         return $wpdb->prefix . 'evh_reservations';
@@ -12,6 +13,7 @@ final class EVH_Storage {
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         $table = self::table();
         $charset = $wpdb->get_charset_collate();
+        
         dbDelta("CREATE TABLE $table (
             id bigint unsigned NOT NULL AUTO_INCREMENT,
             product_id bigint unsigned NOT NULL,
@@ -28,40 +30,48 @@ final class EVH_Storage {
             KEY availability (product_id,state,start_date,end_date),
             KEY orders (order_id,item_id)
         ) ENGINE=InnoDB $charset;");
-        update_option('evh_schema_version', '0.1.0', false);
+
+        update_option('evh_schema_version', EVH_SCHEMA_VERSION, false);
     }
 
     public static function ready(): void {
         global $wpdb;
         static $checked = false;
         if ($checked) { return; }
+
         $row = $wpdb->get_row($wpdb->prepare('SHOW TABLE STATUS LIKE %s', $wpdb->esc_like(self::table())), ARRAY_A);
         if (!$row || strtoupper($row['Engine'] ?? '') !== 'INNODB') {
-            throw new RuntimeException('Hire reservations require an InnoDB database table. Please contact our team.');
+            throw new RuntimeException('Hire reservations require an InnoDB database table. Please contact support.');
         }
+
         $version = (string) $wpdb->get_var('SELECT VERSION()');
         if (stripos($version, 'MariaDB') !== false) {
-            // Some MariaDB servers report a 5.5.5 compatibility prefix.
             $version = preg_replace('/^5\.5\.5-/', '', $version);
-            if (version_compare($version, '10.1', '<')) { throw new RuntimeException('Hire reservations require MariaDB 10.1 or newer.'); }
+            if (version_compare($version, '10.1', '<')) { 
+                throw new RuntimeException('Hire reservations require MariaDB 10.1 or newer.'); 
+            }
         } elseif (!$version || version_compare($version, '5.7.5', '<')) {
             throw new RuntimeException('Hire reservations require MySQL 5.7.5 or newer.');
         }
+
         $checked = true;
     }
-    /** Read uncached capacity while holding the reservation lock. */
+
     public static function capacity(int $id): int {
         global $wpdb;
         $value = $wpdb->get_var($wpdb->prepare("SELECT meta_value FROM {$wpdb->postmeta} WHERE post_id=%d AND meta_key='_evh_capacity' ORDER BY meta_id DESC LIMIT 1", $id));
-        if ($wpdb->last_error) { throw new RuntimeException('Vehicle capacity cannot be verified.'); }
+        if ($wpdb->last_error) { 
+            throw new RuntimeException('Vehicle capacity cannot be verified.'); 
+        }
         return (int) $value;
     }
 
-    /** Advisory locks are shared by all reservation writers and fail closed if unsupported. */
     public static function locked(array $ids, callable $callback) {
         global $wpdb;
-        $ids = array_unique(array_map('absint', $ids)); sort($ids, SORT_NUMERIC);
+        $ids = array_unique(array_map('absint', $ids)); 
+        sort($ids, SORT_NUMERIC);
         $locks = array();
+
         try {
             foreach ($ids as $id) {
                 $name = 'evh_' . substr(hash('sha256', DB_NAME . ':' . $wpdb->prefix . ':' . $id), 0, 48);
@@ -81,14 +91,21 @@ final class EVH_Storage {
     public static function active(int $product_id, string $start, string $end, int $exclude_order = 0): array {
         global $wpdb;
         $table = self::table();
-        $sql = "SELECT start_date,end_date,quantity FROM $table
-            WHERE product_id=%d AND state IN ('held','confirmed','manual')
+        $sql = "SELECT start_date, end_date, quantity FROM $table
+            WHERE product_id = %d AND state IN ('held', 'confirmed', 'manual')
             AND (expires_at IS NULL OR expires_at > %s)
             AND start_date <= %s AND end_date >= %s";
+        
         $args = array($product_id, gmdate('Y-m-d H:i:s'), $end, $start);
-        if ($exclude_order) { $sql .= ' AND order_id != %d'; $args[] = $exclude_order; }
+        if ($exclude_order) { 
+            $sql .= ' AND order_id != %d'; 
+            $args[] = $exclude_order; 
+        }
+
         $rows = $wpdb->get_results($wpdb->prepare($sql, $args), ARRAY_A);
-        if ($wpdb->last_error) { throw new RuntimeException('Availability cannot be confirmed. Please contact our team.'); }
+        if ($wpdb->last_error) { 
+            throw new RuntimeException('Availability cannot be confirmed. Please contact support.'); 
+        }
         return $rows ?: array();
     }
 
@@ -105,35 +122,57 @@ final class EVH_Storage {
     public static function reserve_order($order, bool $confirmed = false): void {
         global $wpdb;
         $entries = array();
+        
         foreach ($order->get_items() as $item_id => $item) {
             $q = $item->get_meta('_evh_quote', true);
             if (!$q) { continue; }
             $product_id = (int) $item->get_product_id();
-            if ((float) $item->get_quantity() !== 1.0) { throw new RuntimeException('Each hire selection must reserve exactly one vehicle.'); }
-            EVH_Rules::date($q['input']['start'] ?? ''); EVH_Rules::date($q['input']['end'] ?? '');
-            if ($q['input']['end'] < $q['input']['start']) { throw new RuntimeException('The reservation dates are invalid.'); }
-            $entries[] = array('product_id' => $product_id, 'item_id' => $item_id, 'quantity' => (int) $item->get_quantity(),
-                'start_date' => $q['input']['start'], 'end_date' => $q['input']['end']);
+            if ((float) $item->get_quantity() !== 1.0) { 
+                throw new RuntimeException('Each hire selection must reserve exactly one vehicle.'); 
+            }
+            EVH_Rules::date($q['input']['start'] ?? ''); 
+            EVH_Rules::date($q['input']['end'] ?? '');
+            if ($q['input']['end'] < $q['input']['start']) { 
+                throw new RuntimeException('The reservation dates are invalid.'); 
+            }
+            $entries[] = array(
+                'product_id' => $product_id, 
+                'item_id' => $item_id, 
+                'quantity' => (int) $item->get_quantity(),
+                'start_date' => $q['input']['start'], 
+                'end_date' => $q['input']['end']
+            );
         }
+
         if (!$entries) { return; }
+
         self::locked(array_column($entries, 'product_id'), function() use ($order, $confirmed, $entries, $wpdb) {
             self::ready();
             $order_id = $order->get_id();
             $table = self::table();
             $grouped = array();
-            foreach ($entries as $entry) { $grouped[$entry['product_id']][] = $entry; }
+
+            foreach ($entries as $entry) { 
+                $grouped[$entry['product_id']][] = $entry; 
+            }
+
             foreach ($grouped as $id => $new) {
                 $product = wc_get_product($id);
                 if (!$product || $product->get_meta('_evh_enabled') !== 'yes') {
-                    throw new RuntimeException('This vehicle is no longer bookable. Please contact our team.');
+                    throw new RuntimeException('This vehicle is no longer bookable. Please contact support.');
                 }
-                $start = min(array_column($new, 'start_date')); $end = max(array_column($new, 'end_date'));
+                $start = min(array_column($new, 'start_date')); 
+                $end = max(array_column($new, 'end_date'));
                 $rows = array_merge(self::active($id, $start, $end, $order_id), $new);
                 if (EVH_Rules::peak($rows, $start, $end) > self::capacity((int) $id)) {
                     throw new RuntimeException('A vehicle has just become unavailable. Please choose another vehicle or dates.');
                 }
             }
-            if ($wpdb->query('START TRANSACTION') === false) { throw new RuntimeException('The reservation could not be saved.'); }
+
+            if ($wpdb->query('START TRANSACTION') === false) { 
+                throw new RuntimeException('The reservation could not be saved.'); 
+            }
+
             try {
                 if ($wpdb->delete($table, array('order_id' => $order_id), array('%d')) === false) {
                     throw new RuntimeException('The reservation could not be saved. Please try again.');
@@ -144,11 +183,14 @@ final class EVH_Storage {
                     $entry['expires_at'] = $confirmed ? null : gmdate('Y-m-d H:i:s', time() + 30 * MINUTE_IN_SECONDS);
                     $entry['created_at'] = gmdate('Y-m-d H:i:s');
                     $entry['reference'] = 'WooCommerce order ' . $order->get_order_number();
+                    
                     if ($wpdb->insert($table, $entry) === false) {
                         throw new RuntimeException('The reservation could not be saved. Please try again.');
                     }
                 }
-                if ($wpdb->query('COMMIT') === false) { throw new RuntimeException('The reservation could not be committed.'); }
+                if ($wpdb->query('COMMIT') === false) { 
+                    throw new RuntimeException('The reservation could not be committed.'); 
+                }
             } catch (Throwable $e) {
                 $wpdb->query('ROLLBACK');
                 throw $e;
@@ -172,14 +214,29 @@ final class EVH_Storage {
     public static function manual(int $id, string $start, string $end, int $quantity, string $reference): void {
         global $wpdb;
         self::ready();
-        $a = EVH_Rules::date($start); $b = EVH_Rules::date($end);
-        if ($b < $a || $quantity < 1 || $quantity > 10000) { throw new RuntimeException('Check the dates and quantity.'); }
+        $a = EVH_Rules::date($start); 
+        $b = EVH_Rules::date($end);
+        if ($b < $a || $quantity < 1 || $quantity > 10000) { 
+            throw new RuntimeException('Check the dates and quantity.'); 
+        }
         $product = wc_get_product($id);
-        if (!$product || $product->get_meta('_evh_enabled') !== 'yes') { throw new RuntimeException('Choose an enabled hire product.'); }
+        if (!$product || $product->get_meta('_evh_enabled') !== 'yes') { 
+            throw new RuntimeException('Choose an enabled hire product.'); 
+        }
+
         self::locked(array($id), function() use ($wpdb, $id, $start, $end, $quantity, $reference) {
-            if (self::available($id, $start, $end) < $quantity) { throw new RuntimeException('Not enough vehicles are available for that period.'); }
-            if (!$wpdb->insert(self::table(), array('product_id' => $id, 'start_date' => $start, 'end_date' => $end,
-                'quantity' => $quantity, 'state' => 'manual', 'reference' => $reference, 'created_at' => gmdate('Y-m-d H:i:s')))) {
+            if (self::available($id, $start, $end) < $quantity) { 
+                throw new RuntimeException('Not enough vehicles are available for that period.'); 
+            }
+            if (!$wpdb->insert(self::table(), array(
+                'product_id' => $id, 
+                'start_date' => $start, 
+                'end_date' => $end,
+                'quantity' => $quantity, 
+                'state' => 'manual', 
+                'reference' => $reference, 
+                'created_at' => gmdate('Y-m-d H:i:s')
+            ))) {
                 throw new RuntimeException('The manual reservation could not be saved.');
             }
         });
@@ -189,7 +246,10 @@ final class EVH_Storage {
         global $wpdb;
         $table = self::table();
         $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id=%d AND order_id=0 AND state='manual'", $reservation_id));
-        if (!$row) { throw new RuntimeException('Manual reservation not found.'); }
+        if (!$row) { 
+            throw new RuntimeException('Manual reservation not found.'); 
+        }
+
         self::locked(array($row->product_id), function() use ($wpdb, $table, $reservation_id) {
             if ($wpdb->update($table, array('state' => 'released'), array('id' => $reservation_id, 'order_id' => 0)) === false) {
                 throw new RuntimeException('The reservation could not be released.');
